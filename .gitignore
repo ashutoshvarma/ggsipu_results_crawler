@@ -2,3 +2,8 @@ firebase_key.json
 
 .vscode/
 venv
+
+_test*.py
+
+grc.log
+last
