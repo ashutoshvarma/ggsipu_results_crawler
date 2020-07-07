@@ -7,6 +7,7 @@ import os
 import sys
 from logging import DEBUG, INFO, Formatter, StreamHandler, getLogger, handlers
 from urllib.parse import urljoin
+from io import BytesIO
 
 import bs4 as bs
 from ggsipu_result import parse_result_pdf, toJSON
@@ -279,7 +280,7 @@ def main(dumps):
         for pdf_info in reversed(pdf_infos):
             logger.info(f'Processing {pdf_info}')
             if pdf := download_file(pdf_info['url']):
-                subs, results = parse_result_pdf(pdf)
+                subs, results = parse_result_pdf(BytesIO(pdf))
                 logger.log(
                     f'f{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
                 )
