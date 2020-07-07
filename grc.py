@@ -173,6 +173,7 @@ class BaseDump:
         self.pdf_info = pdf_info
         self.results = results
         self.subs = subs
+        return self
 
     def start(self):
         self.dump_results(self.results)
