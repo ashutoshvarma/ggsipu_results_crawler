@@ -281,7 +281,7 @@ def main(dumps):
             logger.info(f'Processing {pdf_info}')
             if pdf := download_file(pdf_info['url']):
                 subs, results = parse_result_pdf(BytesIO(pdf))
-                logger.log(
+                logger.info(
                     f'f{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
                 )
                 for dump in dumps:
