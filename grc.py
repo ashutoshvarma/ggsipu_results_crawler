@@ -176,13 +176,13 @@ class BaseDump:
         return self
 
     def start(self):
-        self.dump_results(self.results)
-        self.dump_subjects(self.subs)
+        self.dump_results()
+        self.dump_subjects()
 
-    def dump_results(self, results=None):
+    def dump_results(self):
         raise NotImplementedError
 
-    def dump_subjects(self, subjs=None):
+    def dump_subjects(self):
         raise NotImplementedError
 
     def _dump_image(self, img, roll_num):
@@ -306,4 +306,4 @@ if __name__ == "__main__":
     dumps = [FirbaseDump, ]
     logger.info(f"Crawler Dumps - {dumps}")
     main(dumps)
-    logger.info(f"SCRIPT ENDED (v{__version__})")
+    logger.info(f"SCRIPT ENDED (v{__version__}) {os.linesep}")
