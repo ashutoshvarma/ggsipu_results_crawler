@@ -60,7 +60,7 @@ LAST_JSON = option_value(
     'last-json') or os.path.join(ROOT, 'last', 'last.json')
 RESULTS_URL = option_value(
     'results-url') or 'http://164.100.158.135/ExamResults/ExamResultsmain.htm'
-RESULT_SCRAP_DEPTH = option_value('scrap-depth') or 2
+RESULT_SCRAP_DEPTH = int(option_value('scrap-depth')) or 2
 
 OPTION_FORCE_ALL = has_option('force-all')
 
