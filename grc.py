@@ -27,6 +27,7 @@ def has_option(name):
         return True
     return False
 
+
 def option_value(name):
     for index, option in enumerate(sys.argv):
         if option == '--' + name:
@@ -50,10 +51,17 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.3945.16 Safari/537.36"
 }
 
+ROOT = os.path.abspath(os.path.dirname(__file__))
+
 PRODUCTION = has_option('production')
 LOG_PATH = option_value('log-path') or 'grc.log'
-RESULTS_URL = option_value('results-url') or 'http://164.100.158.135/ExamResults/ExamResultsmain.htm'
+LAST_JSON = option_value(
+    'last-json') or os.path.join(ROOT, 'last', 'last.json')
+RESULTS_URL = option_value(
+    'results-url') or 'http://164.100.158.135/ExamResults/ExamResultsmain.htm'
 RESULT_SCRAP_DEPTH = option_value('scrap-depth') or 2
+
+OPTION_FORCE_ALL = has_option('force-all')
 
 
 def setupLogging(logfile, to_file=True):
@@ -81,8 +89,6 @@ def setupLogging(logfile, to_file=True):
     logger.addHandler(streamhandler)
 
     return logger
-
-
 
 
 def _only_result_tr(tag):
@@ -129,6 +135,7 @@ def scrap_results_pdfs(soup, base_url):
 
 
 def get_result_pdfs(url=RESULTS_URL, recursive=0):
+    logger.debug(f'Scraping pdf from {url} with recursive={recursive}')
     html = get(url, headers=HEADERS).text
     soup = bs.BeautifulSoup(html, 'lxml')
 
@@ -215,7 +222,7 @@ class FirbaseDump(BaseDump):
             for r in self.results
         }
 
-        #TODO: Results and Student-Results relation
+        # TODO: Results and Student-Results relation
 
         institutions_ref.set(institutions)
         stu_ref.update(stu_update_dict)
@@ -227,16 +234,63 @@ class FirbaseDump(BaseDump):
         subs_ref.set(self.subs)
 
 
+def dump_last(pdfinfo):
+    os.makedirs(os.path.dirname(LAST_JSON), exist_ok=True)
+    with open(LAST_JSON, 'w') as fp:
+        json.dump(pdfinfo, fp)
+        logger.debug(f'Last PDF info saved - {pdfinfo}')
+
+
+def load_last():
+    last = None
+    try:
+        if os.path.isfile(LAST_JSON):
+            with open(LAST_JSON, 'r') as fp:
+                last = json.load(fp)
+    except json.decoder.JSONDecodeError as ex:
+        logger.exception(str(ex))
+
+    if last:
+        logger.debug(f'Last PDF info loaded - {last}')
+    else:
+        logger.debug(f'No Last PDF loaded')
+    return last
+
+
+def new_result_pdfs():
+    last = load_last()
+    all_pdfs = get_result_pdfs(recursive=RESULT_SCRAP_DEPTH)
+    if not last or OPTION_FORCE_ALL:
+        return all_pdfs
+    else:
+        pdfs = []
+        for pdf in all_pdfs:
+            if pdf != last:
+                pdfs.append(pdf)
+            else:
+                break
+        return pdfs
+
+
 def main(dumps):
     try:
-        pdf_infos = get_result_pdfs(recursive=RESULT_SCRAP_DEPTH)
-        for pdf_info in pdf_infos:
+        pdf_infos = new_result_pdfs()
+        logger.info(f'{len(pdf_infos)} - New Result PDFs found')
+        for pdf_info in reversed(pdf_infos):
+            logger.info(f'Processing {pdf_info}')
             if pdf := download_file(pdf_info['url']):
                 subs, results = parse_result_pdf(pdf)
+                logger.log(
+                    f'f{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
+                )
                 for dump in dumps:
+                    logger.info(f'Dumping into {dump}')
                     dump().set_data(pdf_info, results, subs).start()
-    except:
-        pass
+        # FIXME:  better logic to save last, refer inu.py
+        if len(pdf_infos) > 0:
+            dump_last(pdf_infos[0])
+    except Exception as ex:
+        logger.exception(str(ex))
 
 
 if __name__ == "__main__":
@@ -248,7 +302,6 @@ if __name__ == "__main__":
         logger.info(f"SCRIPT STARTED (v{__version__}) [LOCAL]")
 
     dumps = [FirbaseDump, ]
-    logger.info(f"Notice Sources - {dumps}")
-
+    logger.info(f"Crawler Dumps - {dumps}")
     main(dumps)
     logger.info(f"SCRIPT ENDED (v{__version__})")
