@@ -1,0 +1,6 @@
+ggsipu-result==0.3.1
+firebase_admin
+requests
+beautifulsoup4
+lxml
+Pillow
