@@ -166,9 +166,6 @@ def download_file(url, html_allow=False, headers=HEADERS, raise_ex=False):
 class BaseDump:
     name = 'BaseDump'
 
-    def __init__(self):
-        pass
-
     def set_data(self, pdf_info, results=None, subs=None):
         self.pdf_info = pdf_info
         self.results = results
@@ -192,12 +189,13 @@ class BaseDump:
 class FirbaseDump(BaseDump):
     name = 'Firbase'
 
-    def __init__(self):
+    def init(self):
         import firebase_admin
         from firebase_admin import db
         self.app = firebase_admin.initialize_app()
         self.db = db
         self.ref = db.reference('server/data')
+        return self
 
     def dump_results(self):
         if not self.results or not isinstance(self.results, list):
@@ -287,7 +285,7 @@ def main(dumps):
                 )
                 for dump in dumps:
                     logger.info(f'Dumping into {dump}')
-                    dump().set_data(pdf_info, results, subs).start()
+                    dump.init().set_data(pdf_info, results, subs).start()
         # FIXME:  better logic to save last, refer inu.py
         if len(pdf_infos) > 0:
             dump_last(pdf_infos[0])
@@ -303,7 +301,7 @@ if __name__ == "__main__":
         logger = setupLogging(LOG_PATH, True)
         logger.info(f"SCRIPT STARTED (v{__version__}) [LOCAL]")
 
-    dumps = [FirbaseDump, ]
+    dumps = [FirbaseDump(), ]
     logger.info(f"Crawler Dumps - {dumps}")
     main(dumps)
     logger.info(f"SCRIPT ENDED (v{__version__}) {os.linesep}")
