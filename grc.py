@@ -45,6 +45,11 @@ def option_value(name):
     env_val = os.getenv(name.upper().replace('-', '_'))
     return env_val
 
+def tryint(i):
+    try:
+        return int(i)
+    except:
+        return None
 
 # CONSTANTs and OPTIONs
 
@@ -60,7 +65,7 @@ LAST_JSON = option_value(
     'last-json') or os.path.join(ROOT, 'last', 'last.json')
 RESULTS_URL = option_value(
     'results-url') or 'http://164.100.158.135/ExamResults/ExamResultsmain.htm'
-RESULT_SCRAP_DEPTH = int(option_value('scrap-depth')) or 2
+RESULT_SCRAP_DEPTH = tryint(option_value('scrap-depth')) or 2
 
 OPTION_FORCE_ALL = has_option('force-all')
 
@@ -281,7 +286,7 @@ def main(dumps):
             if pdf := download_file(pdf_info['url']):
                 subs, results = parse_result_pdf(BytesIO(pdf))
                 logger.info(
-                    f'f{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
+                    f'{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
                 )
                 for dump in dumps:
                     logger.info(f'Dumping into {dump}')
