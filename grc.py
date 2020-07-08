@@ -5,16 +5,18 @@ __version__ = "0.1"
 import json
 import os
 import sys
+from io import BytesIO
 from logging import DEBUG, INFO, Formatter, StreamHandler, getLogger, handlers
 from urllib.parse import urljoin
-from io import BytesIO
 
 import bs4 as bs
-from ggsipu_result import parse_result_pdf, toJSON
+import firebase_admin
+from firebase_admin import db as firebase_db
+from ggsipu_result import parse_result_pdf, toDict
 from requests import get
 
-
 # OPTION HANDLING
+
 
 def has_option(name):
     try:
@@ -45,6 +47,7 @@ def option_value(name):
     env_val = os.getenv(name.upper().replace('-', '_'))
     return env_val
 
+
 def tryint(i):
     try:
         return int(i)
@@ -52,6 +55,7 @@ def tryint(i):
         return None
 
 # CONSTANTs and OPTIONs
+
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.3945.16 Safari/537.36"
@@ -191,52 +195,87 @@ class BaseDump:
         raise NotImplementedError
 
 
-class FirbaseDump(BaseDump):
-    name = 'Firbase'
+class FirebaseDump(BaseDump):
+    name = 'Firebase'
+
+    def _generate_result_dict(self, result, pdf_info):
+        return {
+            'examination_name': result.examination_name,
+            'marks': toDict(result.marks),
+            'semester': result.semester,
+            'pdf_info': pdf_info
+        }
+
+    def _process_instituitons(self, results):
+        inst_dict = {}
+        for r in results:
+            if r.institution_code and r.institution_name:
+                inst_dict[r.institution_code] = r.institution_name
+            else:
+                logger.warning(
+                    f'Not processing Institution as Insufficent data in {toDict(r)}'
+                )
+        if len(inst_dict) > 0:
+            inst_ref = self.ref.child('institutions')
+            inst_ref.update(inst_dict)
+
+    def _process_students(self, results):
+        update_dict = {}
+        for r in results:
+            if r.institution_code is not None and r.batch is not None and r.roll_num is not None:
+                base_key = f'{r.institution_code}/{r.batch}/{r.roll_num}'
+
+                update_dict[f'{base_key}/name'] = r.student_name
+                update_dict[f'{base_key}/programme_code'] = r.programme_code
+                update_dict[f'{base_key}/programme_name'] = r.programme_name
+                update_dict[f'{base_key}/batch'] = r.batch
+            else:
+                logger.warn(
+                    f'Not processing Student as Insufficient info in {r}'
+                )
+        if len(update_dict) > 0:
+            stu_ref = self.ref.child('students')
+            stu_ref.update(update_dict)
+            logger.debug(
+                f'UPDATE Students {update_dict}'
+            )
+
+    def _process_results(self, results, pdf_info):
+        stu_ref = self.ref.child('students')
+        for r in results:
+            if r.institution_code is not None and r.batch is not None and r.roll_num is not None:
+                base_ref = stu_ref.child(
+                    f'{r.institution_code}').child(
+                    f'{r.batch}').child(
+                    f'{r.roll_num}').child(
+                    'results'
+                )
+                result_dict = self._generate_result_dict(r, pdf_info)
+                push_id = base_ref.push(result_dict)
+                logger.debug(
+                    f'PUSH Result {result_dict} for {r.roll_num} with key {push_id}'
+                )
 
     def init(self):
-        import firebase_admin
-        from firebase_admin import db
         self.app = firebase_admin.initialize_app()
-        self.db = db
-        self.ref = db.reference('server/data')
+        self.db = firebase_db
+        self.ref = firebase_db.reference('server/data')
         return self
 
     def dump_results(self):
         if not self.results or not isinstance(self.results, list):
             return
-
-        # institutions ref
-        institutions_ref = self.ref.child('institutions')
-        # students ref
-        stu_ref = self.ref.child('students')
-
-        # update institutions
-        institutions = {
-            r.institution_code: r.institution_name for r in self.results
-        }
-
-        # update students
-        stu_update_dict = {
-            f'{r.institution_code}/{r.batch}/{r.roll_num}': {
-                'name': r.student_name,
-                'programme_code': r.programme_code,
-                'programme_name': r.programme_name,
-                'batch': r.batch
-            }
-            for r in self.results
-        }
-
-        # TODO: Results and Student-Results relation
-
-        institutions_ref.set(institutions)
-        stu_ref.update(stu_update_dict)
+        self._process_instituitons(self.results)
+        self._process_students(self.results)
+        self._process_results(self.results, self.pdf_info)
 
     def dump_subjects(self):
         if not self.subs or not isinstance(self.subs, dict):
             return
         subs_ref = self.ref.child('subjects')
-        subs_ref.set(self.subs)
+        if len(self.subs) > 0:
+            subs_ref.set(toDict(self.subs))
+            logger.debug(f'SET Subjects {toDict(self.subs)}')
 
 
 def dump_last(pdfinfo):
@@ -290,10 +329,11 @@ def main(dumps):
                 )
                 for dump in dumps:
                     logger.info(f'Dumping into {dump}')
-                    dump.init().set_data(pdf_info, results, subs).start()
-        # FIXME:  better logic to save last, refer inu.py
-        if len(pdf_infos) > 0:
-            dump_last(pdf_infos[0])
+                    dump.set_data(pdf_info, results, subs).start()
+
+                # FIXME:  better logic to save last, refer inu.py
+                dump_last(pdf_info)
+
     except Exception as ex:
         logger.exception(str(ex))
 
@@ -306,7 +346,7 @@ if __name__ == "__main__":
         logger = setupLogging(LOG_PATH, True)
         logger.info(f"SCRIPT STARTED (v{__version__}) [LOCAL]")
 
-    dumps = [FirbaseDump(), ]
+    dumps = [FirebaseDump().init(), ]
     logger.info(f"Crawler Dumps - {dumps}")
     main(dumps)
     logger.info(f"SCRIPT ENDED (v{__version__}) {os.linesep}")
