@@ -1,3 +1,4 @@
 {
-    "databaseURL": "https://ggsipu-result-cloud.firebaseio.com"
+    "databaseURL": "https://ggsipu-result-cloud.firebaseio.com",
+    "storageBucket": "ggsipu-result-cloud.appspot.com"
 }
