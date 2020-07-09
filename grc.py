@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """ GGSIPU Results Crawler Script """
 __version__ = "0.1"
 
@@ -18,6 +18,10 @@ from firebase_admin import storage as firebase_storage
 from requests import get
 
 from ggsipu_result import parse_result_pdf, toDict
+
+if sys.version_info < (3, 8):
+    print("This python script requires at least python 3.8 or newer")
+    sys.exit(1)
 
 # OPTION HANDLING
 
