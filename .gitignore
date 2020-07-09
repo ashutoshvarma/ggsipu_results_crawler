@@ -7,3 +7,5 @@ _test*.py
 
 grc.log
 last
+
+*.lock
