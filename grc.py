@@ -14,6 +14,7 @@ from urllib.parse import urljoin
 import bs4 as bs
 import firebase_admin
 from firebase_admin import db as firebase_db
+from firebase_admin import storage as firebase_storage
 from requests import get
 
 from ggsipu_result import parse_result_pdf, toDict
@@ -274,6 +275,17 @@ class FirebaseDump(BaseDump):
             stu_ref.update(update_dict)
             logger.debug(f"UPDATE Students {update_dict}")
 
+    def _upload_student_image(self, result):
+        blob = self.bucket.blob(f'photos/students/{result.roll_num}.jpeg')
+        blob.content_type = 'image/jpeg'
+        logger.debug(f'Uploading Student image - {blob.name}')
+        try:
+            img_fp = BytesIO()
+            result.image.save(img_fp, format='JPEG')
+            blob.upload_from_file(img_fp, rewind=True)
+        except Exception as ex:
+            logger.exception(str(ex))
+
     def _process_results(self, results, pdf_info):
         res_dict = {}
         for r in results:
@@ -287,6 +299,8 @@ class FirebaseDump(BaseDump):
                 res_dict[f"{base_ref_addr}/{unique_key}"] = self._generate_result_dict(
                     r, pdf_info
                 )
+                if r.image:
+                    self._upload_student_image(r)
             else:
                 logger.warn(f"Not processing Result as Insufficient info in {r}")
         if len(res_dict) > 0:
@@ -298,6 +312,7 @@ class FirebaseDump(BaseDump):
         self.app = firebase_admin.initialize_app()
         self.db = firebase_db
         self.ref = firebase_db.reference("server/data")
+        self.bucket = firebase_storage.bucket()
         return self
 
     def dump_results(self):
