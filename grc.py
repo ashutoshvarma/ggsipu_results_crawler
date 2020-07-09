@@ -85,7 +85,9 @@ RESULTS_URL = (
     option_value("results-url")
     or "http://164.100.158.135/ExamResults/ExamResultsmain.htm"
 )
-RESULT_SCRAP_DEPTH = tryint(option_value("scrap-depth")) or 2
+RESULT_SCRAP_DEPTH = (
+    2 if (depth := tryint(option_value("scrap-depth"))) is None else depth
+)
 
 OPTION_FORCE_ALL = has_option("force-all")
 OPTION_SKIP_UPLOAD_IMAGES = has_option("skip-upload-images")
@@ -277,12 +279,12 @@ class FirebaseDump(BaseDump):
             logger.debug(f"UPDATE Students {update_dict}")
 
     def _upload_student_image(self, result):
-        blob = self.bucket.blob(f'photos/students/{result.roll_num}.jpeg')
-        blob.content_type = 'image/jpeg'
-        logger.debug(f'Uploading Student image - {blob.name}')
+        blob = self.bucket.blob(f"photos/students/{result.roll_num}.jpeg")
+        blob.content_type = "image/jpeg"
+        logger.debug(f"Uploading Student image - {blob.name}")
         try:
             img_fp = BytesIO()
-            result.image.save(img_fp, format='JPEG')
+            result.image.save(img_fp, format="JPEG")
             blob.upload_from_file(img_fp, rewind=True)
         except Exception as ex:
             logger.exception(str(ex))
