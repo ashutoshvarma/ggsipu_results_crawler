@@ -88,6 +88,7 @@ RESULTS_URL = (
 RESULT_SCRAP_DEPTH = tryint(option_value("scrap-depth")) or 2
 
 OPTION_FORCE_ALL = has_option("force-all")
+OPTION_SKIP_UPLOAD_IMAGES = has_option("skip-upload-images")
 
 
 def setupLogging(logfile, to_file=True):
@@ -299,7 +300,7 @@ class FirebaseDump(BaseDump):
                 res_dict[f"{base_ref_addr}/{unique_key}"] = self._generate_result_dict(
                     r, pdf_info
                 )
-                if r.image:
+                if r.image and not OPTION_SKIP_UPLOAD_IMAGES:
                     self._upload_student_image(r)
             else:
                 logger.warn(f"Not processing Result as Insufficient info in {r}")
