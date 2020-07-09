@@ -341,7 +341,9 @@ def dump_last(pdfinfo):
 def load_last():
     last = None
     try:
-        if os.path.isfile(LAST_JSON):
+        if LAST_JSON.startswith("{"):
+            last = json.loads(LAST_JSON)
+        elif os.path.isfile(LAST_JSON):
             with open(LAST_JSON, "r") as fp:
                 last = json.load(fp)
     except json.decoder.JSONDecodeError as ex:
