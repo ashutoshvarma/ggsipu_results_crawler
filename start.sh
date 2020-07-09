@@ -1,9 +1,25 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# BEFORE RUNNING THE SCRIPT MAKE SURE YOU HAVE SET FOLLOWING
+# ENVs IN YOUR SHELL.
+#   GIT_OAUTH_TOKEN - auth token for your GIT_REPO with push access
+#   GCLOUD_KEY - json content of your google cloud key it will
+#                      used for setting GOOGLE_APPLICATION_CREDENTIALS
+#   FIREBASE_CONFIG - for init firebase app (default firebase_config.json)
+set -eE
 
 CLONE_DIR=${CLONE_DIR:=last}
 GIT_REPO=${ARCHIVE_GIT_REPO:=GGSIPUResultTracker/ggsipu_results_archive}
 GIT_BRANCH=${ARCHIVE_GIT_BRANCH:=dev-local}
 
+TMP_DIR=${TMP_DIR:=.tmp}
+mkdir -p ${TMP_DIR}
+
+
+FIREBASE_CONFIG=${FIREBASE_CONFIG:=firebase_config.json}
+
+export FIREBASE_CONFIG="${FIREBASE_CONFIG}"
+export GOOGLE_APPLICATION_CREDENTIALS="${TMP_DIR}"/gck.json
 
 # Only use colors if connected to a terminal
 if [ -t 1 ]; then
@@ -27,7 +43,9 @@ function log_error() { echo "${BOLD}${RED}[ERROR] : ${@}${RESET}"; }
 function log_info() { echo "${BOLD}${YELLOW}[INFO] : ${@}${RESET}"; }
 function log_success() { echo "${BOLD}${GREEN}[SUCCESS] : ${@}${RESET}"; }
 
-trap "echo '[INFO] Exiting scheduler script.'" EXIT
+trap "log_info 'Exiting scheduler script.' && unset GOOGLE_APPLICATION_CREDENTIALS && rm -r ${TMP_DIR} 2>/dev/null" EXIT
+trap "log_error 'Error encountered.'" ERR
+
 nargs=$#
 
 function exit_f()
@@ -72,13 +90,20 @@ function init_git()
 
 function push_git()
 {
-    _git add . && _git -c user.name='GGSIPUTracker' -c user.email='ggsipuresulttracker@@gmail.com' commit -m "sync $(date)"
-    _git push -u origin ${GIT_BRANCH}
+    if [ -z "$(_git status --short)" ]; then
+        log_info "No Changes to push"
+    else
+        _git add . && _git -c user.name='GGSIPUTracker' -c user.email='ggsipuresulttracker@@gmail.com' commit -m "sync $(date)"
+        _git push -u origin ${GIT_BRANCH}
+    fi
 }
 
 
 function start_script()
 {
+    log_info "Setting up GOOGLE_APPLICATION_CREDENTIALS variable"
+    echo "${GCLOUD_KEY}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+
     log_info "Setting up git environment."
     init_git
 
@@ -94,6 +119,8 @@ function start_script()
     push_git
 }
 
+#export _git for subshells
+export -f _git
 
 try_lock
 start_script

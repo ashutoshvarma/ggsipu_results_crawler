@@ -6,6 +6,9 @@ venv
 _test*.py
 
 grc.log
+log.log
 last
 
 *.lock
+.tmp/
+bootstrap.sh
