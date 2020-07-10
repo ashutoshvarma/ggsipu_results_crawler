@@ -322,6 +322,8 @@ class FirebaseDump(BaseDump):
         self.db = firebase_db
         self.ref = firebase_db.reference("server/data")
         self.bucket = firebase_storage.bucket()
+        # image upload errors
+        self.img_upload_error = False
         return self
 
     # DUMPING METHODS
@@ -337,13 +339,26 @@ class FirebaseDump(BaseDump):
             subs_ref.update(toDict(self.subs))
 
     def dump_images(self):
-        for r in self.results:
-            if self._check_result(r) and r.image:
-                self._upload_student_image(r)
-            else:
-                logger.warning(
-                    f"Not processing Student Image as Insufficient data in {toDict(r)}"
-                )
+        if not self.img_upload_error:
+            for r in self.results:
+                if self._check_result(r) and r.image:
+                    try:
+                        self._upload_student_image(r)
+                    except Exception as ex:
+                        self.img_upload_error = True
+                        logger.exception(ex)
+                        logger.info(
+                            f"Probably GCloud limit reached, Stoping image uploads. Stopping at PDF-{self.pdf_info}"
+                        )
+                        logger.info(
+                            "To resume image uploads, rerun script with LAST_JSON and SKIP_UPLOAD_DATA options to upload images only"
+                        )
+                        # break from for loop
+                        break
+                else:
+                    logger.warning(
+                        f"Not processing Student Image as Insufficient data in {toDict(r)}"
+                    )
 
 
 def dump_last(pdfinfo):
