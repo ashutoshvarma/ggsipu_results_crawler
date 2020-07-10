@@ -94,7 +94,8 @@ RESULT_SCRAP_DEPTH = (
 )
 
 OPTION_FORCE_ALL = has_option("force-all")
-OPTION_SKIP_UPLOAD_IMAGES = has_option("skip-upload-images")
+OPTION_SKIP_UPLOAD_IMAGES = has_option("skip-images")
+OPTION_SKIP_UPLOAD_DATA = has_option("skip-data")
 
 
 def setupLogging(logfile, to_file=True):
@@ -224,8 +225,11 @@ class BaseDump:
         return self
 
     def start(self):
-        self.dump_results()
-        self.dump_subjects()
+        if not OPTION_SKIP_UPLOAD_DATA:
+            self.dump_results()
+            self.dump_subjects()
+        if not OPTION_SKIP_UPLOAD_IMAGES:
+            self.dump_images()
 
     def dump_results(self):
         raise NotImplementedError
@@ -233,7 +237,7 @@ class BaseDump:
     def dump_subjects(self):
         raise NotImplementedError
 
-    def _dump_image(self, img, roll_num):
+    def dump_images(self):
         raise NotImplementedError
 
 
@@ -248,10 +252,28 @@ class FirebaseDump(BaseDump):
             "pdf_info": pdf_info,
         }
 
+    def _check_result(self, result):
+        return (
+            result.institution_code is not None
+            and result.batch is not None
+            and result.roll_num is not None
+        )
+
+    def _upload_student_image(self, result):
+        blob = self.bucket.blob(f"photos/students/{result.roll_num}.jpeg")
+        blob.content_type = "image/jpeg"
+        logger.debug(f"Uploading Student image - {blob.name}")
+        # try:
+        img_fp = BytesIO()
+        result.image.save(img_fp, format="JPEG")
+        blob.upload_from_file(img_fp, rewind=True)
+        # except Exception as ex:
+        #     logger.exception(str(ex))
+
     def _process_institutions(self, results):
         inst_dict = {}
         for r in results:
-            if r.institution_code and r.institution_name:
+            if self._check_result(r) and r.institution_name:
                 inst_dict[r.institution_code] = r.institution_name
             else:
                 logger.warning(
@@ -259,16 +281,13 @@ class FirebaseDump(BaseDump):
                 )
         if len(inst_dict) > 0:
             inst_ref = self.ref.child("institutions")
+            logger.debug(f"UPDATE Institutions {inst_dict}")
             inst_ref.update(inst_dict)
 
     def _process_students(self, results):
         update_dict = {}
         for r in results:
-            if (
-                r.institution_code is not None
-                and r.batch is not None
-                and r.roll_num is not None
-            ):
+            if self._check_result(r):
                 base_key = f"{r.institution_code}/{r.batch}/{r.roll_num}"
 
                 update_dict[f"{base_key}/name"] = r.student_name
@@ -279,41 +298,24 @@ class FirebaseDump(BaseDump):
                 logger.warn(f"Not processing Student as Insufficient info in {r}")
         if len(update_dict) > 0:
             stu_ref = self.ref.child("students")
-            stu_ref.update(update_dict)
             logger.debug(f"UPDATE Students {update_dict}")
-
-    def _upload_student_image(self, result):
-        blob = self.bucket.blob(f"photos/students/{result.roll_num}.jpeg")
-        blob.content_type = "image/jpeg"
-        logger.debug(f"Uploading Student image - {blob.name}")
-        try:
-            img_fp = BytesIO()
-            result.image.save(img_fp, format="JPEG")
-            blob.upload_from_file(img_fp, rewind=True)
-        except Exception as ex:
-            logger.exception(str(ex))
+            stu_ref.update(update_dict)
 
     def _process_results(self, results, pdf_info):
         res_dict = {}
         for r in results:
-            if (
-                r.institution_code is not None
-                and r.batch is not None
-                and r.roll_num is not None
-            ):
+            if self._check_result(r):
                 base_ref_addr = f"{r.institution_code}/{r.batch}/{r.roll_num}/results"
                 unique_key = generate_key(15)
                 res_dict[f"{base_ref_addr}/{unique_key}"] = self._generate_result_dict(
                     r, pdf_info
                 )
-                if r.image and not OPTION_SKIP_UPLOAD_IMAGES:
-                    self._upload_student_image(r)
             else:
                 logger.warn(f"Not processing Result as Insufficient info in {r}")
         if len(res_dict) > 0:
             stu_ref = self.ref.child("students")
-            stu_ref.update(res_dict)
             logger.debug(f"UPDATE Results {res_dict}")
+            stu_ref.update(res_dict)
 
     def init(self):
         self.app = firebase_admin.initialize_app()
@@ -322,20 +324,26 @@ class FirebaseDump(BaseDump):
         self.bucket = firebase_storage.bucket()
         return self
 
+    # DUMPING METHODS
     def dump_results(self):
-        if not self.results or not isinstance(self.results, list):
-            return
         self._process_institutions(self.results)
         self._process_students(self.results)
         self._process_results(self.results, self.pdf_info)
 
     def dump_subjects(self):
-        if not self.subs or not isinstance(self.subs, dict):
-            return
         subs_ref = self.ref.child("subjects")
         if len(self.subs) > 0:
-            subs_ref.set(toDict(self.subs))
-            logger.debug(f"SET Subjects {toDict(self.subs)}")
+            logger.debug(f"UPDATE Subjects {toDict(self.subs)}")
+            subs_ref.update(toDict(self.subs))
+
+    def dump_images(self):
+        for r in self.results:
+            if self._check_result(r) and r.image:
+                self._upload_student_image(r)
+            else:
+                logger.warning(
+                    f"Not processing Student Image as Insufficient data in {toDict(r)}"
+                )
 
 
 def dump_last(pdfinfo):
