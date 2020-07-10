@@ -23,7 +23,8 @@ if sys.version_info < (3, 8):
     print("This python script requires at least python 3.8 or newer")
     sys.exit(1)
 
-# OPTION HANDLING
+
+# UTILITY FUNCTIONS
 
 
 def has_option(name):
@@ -70,8 +71,7 @@ def generate_key(length):
     )
 
 
-# CONSTANTs and OPTIONs
-
+# GLOBAL OPTIONs & CONSTANTs
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.3945.16 Safari/537.36"
@@ -82,19 +82,35 @@ LOG_LEVEL_CONFIG = {"DEBUG": DEBUG, "INFO": INFO, "WARNING": WARNING}
 ROOT = os.path.abspath(os.path.dirname(__file__))
 
 PRODUCTION = has_option("production")
+
+# Path to save logs
 LOG_PATH = option_value("log-path") or "grc.log"
+
+# Log level - DEBUG, INFO, WARNING
 LOG_LEVEL = LOG_LEVEL_CONFIG.get(option_value("log-level")) or DEBUG
+
+# Last processed pdf_info, if starts with '{' will be loaded as json data
+# else will be assumed a file containing json data.
 LAST_JSON = option_value("last-json") or os.path.join(ROOT, "last", "last.json")
+
+# Results url to start from
 RESULTS_URL = (
     option_value("results-url")
     or "http://164.100.158.135/ExamResults/ExamResultsmain.htm"
 )
+
+# Results scraping depth
 RESULT_SCRAP_DEPTH = (
     2 if (depth := tryint(option_value("scrap-depth"))) is None else depth
 )
 
+# Will process all the PDFs discarding LAST_JSON
 OPTION_FORCE_ALL = has_option("force-all")
+
+# NOTE: set the both true for dry runs
+# Skip the image uploads
 OPTION_SKIP_UPLOAD_IMAGES = has_option("skip-images")
+# Skip all json data uploads
 OPTION_SKIP_UPLOAD_DATA = has_option("skip-data")
 
 # Script will stop if error in uploading images
@@ -265,11 +281,14 @@ class FirebaseDump(BaseDump):
     def _upload_student_image(self, result):
         blob = self.bucket.blob(f"photos/students/{result.roll_num}.jpeg")
         blob.content_type = "image/jpeg"
-        logger.debug(f"Uploading Student image - {blob.name}")
         # try:
-        img_fp = BytesIO()
-        result.image.save(img_fp, format="JPEG")
-        blob.upload_from_file(img_fp, rewind=True)
+        if not blob.exists():
+            logger.debug(f"Uploading Student image - {blob.name}")
+            img_fp = BytesIO()
+            result.image.save(img_fp, format="JPEG")
+            blob.upload_from_file(img_fp, rewind=True)
+        else:
+            logger.debug(f"Skipping Student image, already present at {blob.name}")
         # except Exception as ex:
         #     logger.exception(str(ex))
 
