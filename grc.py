@@ -97,6 +97,9 @@ OPTION_FORCE_ALL = has_option("force-all")
 OPTION_SKIP_UPLOAD_IMAGES = has_option("skip-images")
 OPTION_SKIP_UPLOAD_DATA = has_option("skip-data")
 
+# Script will stop if error in uploading images
+OPTION_EXIT_ON_IMAGE_ERROR = has_option("exit-on-image-error")
+
 
 def setupLogging(logfile, to_file=True):
     logger = getLogger()
@@ -345,15 +348,19 @@ class FirebaseDump(BaseDump):
                     try:
                         self._upload_student_image(r)
                     except Exception as ex:
-                        self.img_upload_error = True
-                        logger.exception(ex)
+                        if OPTION_EXIT_ON_IMAGE_ERROR:
+                            raise ex
+                        else:
+                            logger.exception(ex)
+
                         logger.info(
-                            f"Probably GCloud limit reached, Stoping image uploads. Stopping at PDF-{self.pdf_info}"
+                            f"Probably GCloud limit reached, Stoping image uploads  at PDF-{self.pdf_info}"
                         )
                         logger.info(
                             "To resume image uploads, rerun script with LAST_JSON and SKIP_UPLOAD_DATA options to upload images only"
                         )
                         # break from for loop
+                        self.img_upload_error = True
                         break
                 else:
                     logger.warning(
