@@ -78,10 +78,9 @@ HEADERS = {
 }
 
 LOG_LEVEL_CONFIG = {"DEBUG": DEBUG, "INFO": INFO, "WARNING": WARNING}
-
 ROOT = os.path.abspath(os.path.dirname(__file__))
-
 PRODUCTION = has_option("production")
+DEFAULT_LAST_JSON_FILE = os.path.join(ROOT, "last", "last.json")
 
 # Path to save logs
 LOG_PATH = option_value("log-path") or "grc.log"
@@ -91,7 +90,7 @@ LOG_LEVEL = LOG_LEVEL_CONFIG.get(option_value("log-level")) or DEBUG
 
 # Last processed pdf_info, if starts with '{' will be loaded as json data
 # else will be assumed a file containing json data.
-LAST_JSON = option_value("last-json") or os.path.join(ROOT, "last", "last.json")
+LAST_JSON = option_value("last-json") or DEFAULT_LAST_JSON_FILE
 
 # Results url to start from
 RESULTS_URL = (
@@ -388,8 +387,11 @@ class FirebaseDump(BaseDump):
 
 
 def dump_last(pdfinfo):
-    os.makedirs(os.path.dirname(LAST_JSON), exist_ok=True)
-    with open(LAST_JSON, "w") as fp:
+    json_file = LAST_JSON
+    if json_file.startswith("{"):
+        json_file = DEFAULT_LAST_JSON_FILE
+    os.makedirs(os.path.dirname(json_file), exist_ok=True)
+    with open(json_file, "w") as fp:
         json.dump(pdfinfo, fp)
         logger.debug(f"Last PDF info saved - {pdfinfo}")
 
