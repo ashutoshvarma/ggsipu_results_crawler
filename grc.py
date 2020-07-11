@@ -387,10 +387,10 @@ class FirebaseDump(BaseDump):
                         else:
                             logger.exception(ex)
 
-                        logger.info(
+                        logger.warning(
                             f"Probably GCloud limit reached, Stoping image uploads  at PDF-{self.pdf_info}"
                         )
-                        logger.info(
+                        logger.warning(
                             "To resume image uploads, rerun script with LAST_JSON and SKIP_UPLOAD_DATA options to upload images only"
                         )
                         # break from for loop
@@ -450,18 +450,24 @@ def main(dumps):
         pdf_infos = new_result_pdfs()
         logger.info(f"{len(pdf_infos)} - New Result PDFs found")
         for i, pdf_info in enumerate(reversed(pdf_infos)):
-            logger.info(f"Processing pdf {i+1}/{len(pdf_infos)} - {pdf_info}")
-            if pdf := download_file(pdf_info["url"]):
-                subs, results = parse_result_pdf(BytesIO(pdf))
-                logger.info(
-                    f'{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
-                )
-                for dump in dumps:
-                    logger.info(f"Dumping into {dump}")
-                    dump.set_data(pdf_info, results, subs).start()
+            # Check if file is PDF or not
+            if pdf_info["url"].split(".")[-1].lower() in ("pdf",):
+                logger.info(f"Processing pdf {i+1}/{len(pdf_infos)} - {pdf_info}")
+                if pdf := download_file(pdf_info["url"]):
+                    subs, results = parse_result_pdf(BytesIO(pdf))
+                    logger.info(
+                        f'{len(subs)} Subjects, {len(results)} Results found in {pdf_info["url"]}'
+                    )
+                    for dump in dumps:
+                        logger.debug(f"Dumping into {dump}")
+                        dump.set_data(pdf_info, results, subs).start()
 
-                # FIXME:  better logic to save last, refer inu.py
-                dump_last(pdf_info)
+                    # FIXME:  better logic to save last, refer inu.py
+                    dump_last(pdf_info)
+            else:
+                logger.warning(
+                    f"Not Processing as file is not a PDF document - {pdf_info}"
+                )
 
     except Exception as ex:
         logger.exception(str(ex))
