@@ -105,6 +105,9 @@ LOG_LEVEL = LOG_LEVEL_CONFIG.get(option_value("log-level")) or DEBUG
 # else will be assumed a file containing json data.
 LAST_JSON = option_value("last-json") or DEFAULT_LAST_JSON_FILE
 
+# filter the pdf based on regex pattern
+PDF_FILTER_PATTERN = option_value("pdf-pattern")
+
 # Results url to start from
 RESULTS_URL = (
     option_value("results-url")
@@ -430,6 +433,10 @@ def load_last():
 def new_result_pdfs():
     last = load_last()
     all_pdfs = get_result_pdfs(recursive=RESULT_SCRAP_DEPTH)
+    # filter the PDfs
+    if PDF_FILTER_PATTERN:
+        all_pdfs = list(filter_pdfs(all_pdfs))
+
     if not last or OPTION_FORCE_ALL:
         return all_pdfs
     else:
@@ -440,6 +447,15 @@ def new_result_pdfs():
             else:
                 break
         return pdfs
+
+
+def filter_pdfs(pdf_infos):
+    import re
+
+    RE_PDF = re.compile(PDF_FILTER_PATTERN)
+    for pdf_info in pdf_infos:
+        if _ := RE_PDF.search(pdf_info["title"]):
+            yield pdf_info
 
 
 def main(dumps):
