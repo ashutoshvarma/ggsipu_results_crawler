@@ -18,10 +18,9 @@
 """ GGSIPU Results Crawler Script """
 __version__ = "0.2"
 
+import hashlib
 import json
 import os
-import random
-import string
 import sys
 from io import BytesIO
 from logging import DEBUG, INFO, WARNING, Formatter, StreamHandler, getLogger, handlers
@@ -81,10 +80,8 @@ def tryint(i):
         return None
 
 
-def generate_key(length):
-    return "".join(
-        random.choice(string.ascii_letters + string.digits) for _ in range(length)
-    )
+def generate_result_hash(result):
+    return hashlib.md5(result.toJSON().encode("utf-8", errors="ignore")).hexdigest()
 
 
 # GLOBAL OPTIONs & CONSTANTs
@@ -343,7 +340,7 @@ class FirebaseDump(BaseDump):
         for r in results:
             if self._check_result(r):
                 base_ref_addr = f"{r.institution_code}/{r.batch}/{r.roll_num}/results"
-                unique_key = generate_key(15)
+                unique_key = generate_result_hash(r)
                 res_dict[f"{base_ref_addr}/{unique_key}"] = self._generate_result_dict(
                     r, pdf_info
                 )
